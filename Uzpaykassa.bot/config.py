@@ -1,1 +1,2 @@
 DATABASE_PATH = "bot_database.db"
+ADMIN_ID = 1242592772
