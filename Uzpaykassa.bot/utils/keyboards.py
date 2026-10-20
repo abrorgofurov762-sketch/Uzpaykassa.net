@@ -43,16 +43,16 @@ def get_admin_menu_keyboard():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("💰 Hisob to'ldirish", "💸 Pul yechish")
     keyboard.row("✋ Qo'lda to'ldirish", "📊 Statistika")
-    keyboard.row("📢 Xabar yuborish", "🔧 Bot o'chirish")
-    keyboard.row("💳 Karta qo'shish", "💰 Kasa balansi")
+    keyboard.row("📢 Xabar yuborish", "🔧 Bot o'chirish/yoqish")
+    keyboard.row("💳 Karta qo'shish", "💰 Kassa balansi")
     return keyboard
 
 def get_bookmakers_keyboard():
     """Bukmeker tanlash klaviaturasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.row("🎯 1xBet", "🎲 Melbet")
-    keyboard.row("🎪 Betwiner", "🎨 WinWinBet")
-    keyboard.row("🔙 Orqaga")
+    keyboard.row("🔵 1xBet", "🟡 Melbet")
+    keyboard.row("🟢 Betwinner", "🟣 WinWinBet")
+    keyboard.row("🔴 Mostbet", "🔙 Orqaga")
     return keyboard
 
 def get_back_keyboard():
