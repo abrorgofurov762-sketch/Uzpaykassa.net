@@ -51,4 +51,4 @@ class MostBetAPI:
             return {"Success": False, "Balance": 0, "Limit": 0}
 
 # Global obyekt (handlers/deposit.py шу ном орқали чақиради)
-mostbet_api = MostBetAPI()
+mostbet_api = MostBetAPI(821bc7e6-6d3a-4431-aac6-29e6be392168)
