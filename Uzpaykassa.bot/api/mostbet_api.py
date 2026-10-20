@@ -3,6 +3,9 @@
 class MostBetAPI:
     def __init__(self):
         self.name = "Mostbet"
+        
+        self.api_url = getattr(config, 'MOSTBET_API_URL', 'https://api.mostbet.com/v1')
+        self.api_token = getattr(config, 'MOSTBET_TOKEN', '821bc7e6-6d3a-4431-aac6-29e6be392168')
 
     def find_player(self, player_id: str) -> dict:
         """Foydalanuvchi ID raqamini tekshirish"""
