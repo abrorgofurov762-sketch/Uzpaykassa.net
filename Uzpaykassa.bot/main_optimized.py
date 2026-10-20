@@ -25,6 +25,24 @@ from handlers.payments import register_payment_handlers
 from handlers.payment_detector import PaymentDetector
 from config import BOT_TOKEN
 import config
+import os
+from threading import Thread
+from flask import Flask
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is active!"
+
+def run():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# Серверни орқа фонда ишга тушириш
+Thread(target=run).start()
+
+# Ботнинг асосий коди шу ердан давом этади...
 
 
 # Middleware'ni yoqish
