@@ -1,10 +1,6 @@
 """Klaviatura generatorlari.
 
 Bu modul botdagi barcha reply/inline klaviaturalarning markaziy manbai.
-Optimallashtirishlar:
- - Takroriy kod minimal: har bir funksiyada faqat kerakli tugmalar.
- - Admin va oddiy foydalanuvchi menyulari aniq ajratilgan.
- - Katta o'zgarish yo'q, faqat izoh va kelajakdagi kengaytirish uchun barqarorlik.
 """
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
@@ -17,10 +13,7 @@ def get_phone_request_keyboard():
     return keyboard
 
 def get_main_menu_keyboard():
-    """Asosiy foydalanuvchi menyu klaviaturasi.
-
-    Tarkib: depozit, yechish, ilovalar, aloqa.
-    """
+    """Asosiy foydalanuvchi menyu klaviaturasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("💰 Hisob to'ldirish", "💸 Pul yechish")
     keyboard.row("📱 Ilovalar", "📞 Aloqa")
@@ -35,11 +28,7 @@ def get_main_menu_keyboard_admin():
     return keyboard
 
 def get_admin_menu_keyboard():
-    """Admin panel klaviaturasi.
-
-    Qamrab oladi: depozit/yechish (tezkor), qo'lda to'ldirish, statistika,
-    xabar yuborish, bot holati, karta boshqaruvi va kassa balans.
-    """
+    """Admin panel klaviaturasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("💰 Hisob to'ldirish", "💸 Pul yechish")
     keyboard.row("✋ Qo'lda to'ldirish", "📊 Statistika")
@@ -48,11 +37,11 @@ def get_admin_menu_keyboard():
     return keyboard
 
 def get_bookmakers_keyboard():
-    """Bukmeker tanlash klaviaturasi."""
+    """Bukmeker tanlash klaviaturasi (Standartlashtirilgan)."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.row("🔵 1xBet", "🟡 Melbet")
-    keyboard.row("🟢 Betwinner", "🟣 WinWinBet")
-    keyboard.row("🔴 Mostbet", "🔙 Orqaga")
+    keyboard.row("🎯 1xBet", "🎲 Melbet")
+    keyboard.row("🎪 Betwinner", "🎨 WinWinBet")
+    keyboard.row("🎰 Mostbet", "🔙 Orqaga")
     return keyboard
 
 def get_back_keyboard():
@@ -74,7 +63,7 @@ def get_admin_confirmation_keyboard(withdrawal_id: int):
     return keyboard
 
 def get_card_management_keyboard():
-    """Karta boshqaruv (CRUD) klaviaturasi."""
+    """Karta boshqaruv klaviaturasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("➕ Karta qo'shish", "❌ Karta o'chirish")
     keyboard.row("📋 Kartalar ro'yxati", "🔙 Orqaga")
@@ -88,17 +77,16 @@ def get_balance_keyboard():
     return keyboard
 
 def get_urls_keyboard():
-    """Static admin URL inline klaviaturasi (keyinchalik config dan kelishi mumkin)."""
+    """Static admin URL inline klaviaturasi."""
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("👨‍💼 Admin", url="https://t.me/your_admin"))
     return keyboard
 
 def get_apps_keyboard():
-    """Ilovalar (app/channel) URL inline klaviatura."""
+    """Ilovalar URL inline klaviatura."""
     keyboard = InlineKeyboardMarkup()
     keyboard.add(InlineKeyboardButton("📱 Ilovalar", url="https://t.me/your_apps_channel"))
     return keyboard
-
 
 def get_admin_manual_deposit_confirm_keyboard():
     """Qo'lda to'ldirishni yakunlash uchun tasdiq/bekor inline klaviatura."""
@@ -108,4 +96,3 @@ def get_admin_manual_deposit_confirm_keyboard():
         InlineKeyboardButton("❌ Bekor qilish", callback_data="admin_md_cancel")
     )
     return keyboard
-
