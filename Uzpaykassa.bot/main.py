@@ -16,6 +16,24 @@ from handlers.deposit import execute_deposit
 from utils.keyboards import get_main_menu_keyboard, get_admin_menu_keyboard
 from utils.helpers import create_channel_payment_message
 from utils.state_manager import is_user_in_process
+import os
+from threading import Thread
+from flask import Flask
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is active!"
+
+def run():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# Серверни орқа фонда ишга тушириш
+Thread(target=run).start()
+
+# Ботнинг асосий коди шу ердан давом этади...
 
 # Middleware ni yoqish
 apihelper.ENABLE_MIDDLEWARE = True
