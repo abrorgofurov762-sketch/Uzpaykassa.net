@@ -10,14 +10,14 @@ class MostBetAPI:
     def __init__(self):
         self.name = "Mostbet"
         
-        # Ҳозирча тест/фиктив манзил тургани учун код автоматик равишда хатосиз ишлайди
-        self.api_url = "api-key:821bc7e6-6d3a-4431-aac6-29e6be392168"
+        Ҳозирча тест/фиктив манзил тургани учун код автоматик равишда хатосиз ишлайди
+        self.api_url = "821bc7e6-6d3a-4431-aac6-29e6be392168"
         self.api_token = "e8258b3f-99b1-4c9f-a07d-653b81376390"
 
     def find_player(self, player_id: str) -> dict:
         """Foydalanuvchi ID raqamini tekshirish"""
         try:
-            # Агар ҳали реал API уланмаган бўлса (тест режим):
+             Агар ҳали реал API уланмаган бўлса (тест режим):
             if "mostbet.com" in self.api_url or "SIZNING" in self.api_token:
                 if player_id and len(str(player_id)) >= 3:
                     return {
@@ -27,7 +27,7 @@ class MostBetAPI:
                     }
                 return {"Success": False, "error": "Bunday ID raqam topilmadi"}
 
-            # Реал API сўрови (агар кейинчалик ҳақиқий манзил қўйсангиз ишлайди)
+             Реал API сўрови (агар кейинчалик ҳақиқий манзил қўйсангиз ишлайди)
             url = f"{self.api_url}/player/check"
             headers = {
                 "Authorization": f"Bearer {self.api_token}",
@@ -44,7 +44,7 @@ class MostBetAPI:
     def deposit_player(self, currency: int, player_id: str, amount: float) -> dict:
         """Mostbet ҳисобига пулни автоматик ўтказиш"""
         try:
-            # Агар ҳали реал API уланмаган бўлса (тест режим):
+             Агар ҳали реал API уланмаган бўлса (тест режим):
             if "mostbet.com" in self.api_url or "SIZNING" in self.api_token:
                 return {
                     "Success": False,  # deposit.py мантиғига кўра False = муваффақиятли ўтди
@@ -52,7 +52,7 @@ class MostBetAPI:
                     "message": f"Mostbet ID {player_id} ga {amount} so'm avtomatik o'tkazildi (Test)"
                 }
 
-            # Реал API сўрови
+             Реал API сўрови
             url = f"{self.api_url}/deposit/add"
             headers = {
                 "Authorization": f"Bearer {self.api_token}",
@@ -86,5 +86,5 @@ class MostBetAPI:
         except Exception:
             return {"Success": False, "Balance": 0, "Limit": 0}
 
-# Global obyekt
+ Global obyekt
 mostbet_api = MostBetAPI()
