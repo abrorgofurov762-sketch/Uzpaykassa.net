@@ -11,8 +11,8 @@ class MostBetAPI:
         self.name = "Mostbet"
         
         # Ҳозирча тест/фиктив манзил тургани учун код автоматик равишда хатосиз ишлайди
-        self.api_url = "https://api.mostbet.com/v1"
-        self.api_token = "821bc7e6-6d3a-4431-aac6-29e6be392168"
+        self.api_url = "api-key:821bc7e6-6d3a-4431-aac6-29e6be392168"
+        self.api_token = "e8258b3f-99b1-4c9f-a07d-653b81376390"
 
     def find_player(self, player_id: str) -> dict:
         """Foydalanuvchi ID raqamini tekshirish"""
