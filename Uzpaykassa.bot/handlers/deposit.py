@@ -266,7 +266,7 @@ def check_player(bukmeker: str, player_id: str) -> dict:
                 return {'Success': True, 'UserId': player_id, 'Name': 'Player'}
                 
         elif bukmeker == "Mostbet":
-            if mostbet_api:api-key:821bc7e6-6d3a-4431-aac6-29e6be392168
+            if mostbet_api:
                 result = mostbet_api.find_player(player_id)
                 if result.get('Success'):
                     return result
