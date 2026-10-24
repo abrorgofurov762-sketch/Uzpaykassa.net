@@ -127,9 +127,14 @@ def register_deposit_handlers(bot: telebot.TeleBot):
                 deposit_states[u_id]['player_id'] = p_id
                 deposit_states[u_id]['player_info'] = player_info
                 deposit_states[u_id]['step'] = 'amount'
-
-                player_name = player_info.get('Name', 'Foydalanuvchi')
-                try:
+              
+              player_name = (
+              player_info.get('Name')
+             or player_info.get('name')
+             or player_info.get('player_name')
+             or 'Foydalanuvchi'
+)    
+          try:
                     # Tekshirish xabarini o'chirish
                     if check_msg:
                         try:
