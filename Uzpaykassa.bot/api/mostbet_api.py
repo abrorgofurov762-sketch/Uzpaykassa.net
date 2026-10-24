@@ -5,13 +5,19 @@ import hashlib
 import requests
 
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlencode
 
 
 class MostbetAPI:
     def __init__(self):
-        self.api_key = os.getenv("MOSTBET_API_KEY", "").strip()
-        self.api_secret = os.getenv("MOSTBET_API_SECRET", "").strip()
+        self.api_key = os.getenv(
+            "MOSTBET_API_KEY", ""
+        ).strip()
+
+        self.api_secret = os.getenv(
+            "MOSTBET_API_SECRET", ""
+        ).strip()
+
         self.cashpoint_id = os.getenv(
             "MOSTBET_CASHPOINT_ID", ""
         ).strip()
@@ -31,35 +37,45 @@ class MostbetAPI:
             )
 
         self.session = requests.Session()
+
         self.session.headers.update({
             "Accept": "application/json",
             "User-Agent": "Uzpaykassa-Bot/1.0",
         })
 
     def _timestamp(self):
-        return datetime.now(timezone.utc).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        return datetime.now(
+            timezone.utc
+        ).strftime("%Y-%m-%d %H:%M:%S")
 
-    def _request(self, method, endpoint, data=None):
-        """
-        Mostbet API uchun imzolangan HTTP so'rovi.
-
-        Muhim:
-        - PATH to'liq API yo'li bo'lishi kerak.
-        - JSON tana ixcham formatda yaratiladi.
-        - Secret hech qachon HTTP sarlavhasida yuborilmaydi.
-        """
-
+    def _request(
+        self,
+        method,
+        endpoint,
+        data=None,
+        params=None
+    ):
         method = method.upper()
+
         path = (
             f"/mbc/gateway/v1/api/cashpoint/"
-            f"{self.cashpoint_id}/{endpoint.lstrip('/')}"
+            f"{self.cashpoint_id}/"
+            f"{endpoint.lstrip('/')}"
         )
 
+        # URL parametrlarini imzoga ham qo'shamiz.
+        query_string = urlencode(params or {})
+
+        if query_string:
+            path += "?" + query_string
+
         url = self.base_url + (
-            f"{self.cashpoint_id}/{endpoint.lstrip('/')}"
+            f"{self.cashpoint_id}/"
+            f"{endpoint.lstrip('/')}"
         )
+
+        if query_string:
+            url += "?" + query_string
 
         timestamp = self._timestamp()
 
@@ -74,10 +90,11 @@ class MostbetAPI:
             )
             payload = body.encode("utf-8")
 
-        # Hujjatдаги тартиб:
-        # API_KEY + PATH + REQUEST_BODY + TIMESTAMP
         string_to_sign = (
-            self.api_key + path + body + timestamp
+            self.api_key
+            + path
+            + body
+            + timestamp
         )
 
         signature = hmac.new(
@@ -125,14 +142,13 @@ class MostbetAPI:
                 "data": result,
             }
 
-        except requests.RequestException as exc:
+        except requests.RequestException:
             return {
                 "Success": False,
-                "error": str(exc),
+                "error": "API_CONNECTION_ERROR",
             }
 
     def get_balance(self):
-        """Cashpoint balansini olish."""
         return self._request(
             "GET",
             "balance"
@@ -140,21 +156,83 @@ class MostbetAPI:
 
     def find_player(self, player_id):
         """
-        Hozirча player ID текшируви амалга оширилмайди.
-        Ҳужжатда тасдиқланган player lookup endpoint
-        аниқланмагунча ID ҳақиқий деб қабул қилинмайди.
+        Mostbet ID raqamini tekshiradi
+        va mavjud bo'lsa, o'yinchi ismini oladi.
         """
+
+        player_id = str(player_id).strip()
+
+        if not player_id:
+            return {
+                "Success": False,
+                "error": "PLAYER_ID_EMPTY"
+            }
+
+        result = self._request(
+            "GET",
+            "player/name",
+            params={
+                "brandId": 1,
+                "clientId": player_id,
+            }
+        )
+
+        if not result.get("Success"):
+            return {
+                "Success": False,
+                "error": result.get("error"),
+                "http_status": result.get("http_status"),
+            }
+
+        player_data = result.get("data", {})
+
+        if not isinstance(player_data, dict):
+            return {
+                "Success": False,
+                "error": "INVALID_API_RESPONSE"
+            }
+
+        # Tekshirish xizmati mavjud bo'lmasa,
+        # ID noto'g'ri deb noto'g'ri xulosa qilmaymiz.
+        if player_data.get("warning"):
+            return {
+                "Success": False,
+                "error": "PLAYER_VERIFICATION_UNAVAILABLE",
+                "warning": player_data.get("warning"),
+            }
+
+        if player_data.get("exists") is not True:
+            return {
+                "Success": False,
+                "error": "PLAYER_NOT_FOUND"
+            }
+
+        player_name = player_data.get("name")
+
+        if not player_name:
+            return {
+                "Success": False,
+                "error": "PLAYER_NAME_NOT_RETURNED"
+            }
+
         return {
-            "Success": False,
-            "error": "PLAYER_LOOKUP_NOT_CONFIGURED"
+            "Success": True,
+            "player_id": player_id,
+            "name": player_name,
         }
 
-    def deposit_player(self, brand_id, player_id, amount):
+    def deposit_player(
+        self,
+        brand_id,
+        player_id,
+        amount,
+        currency
+    ):
         """
-        Хавфсизлик учун ҳозирча пул ўтказиш ўчирилган.
-        API транзакциясини яратишдан олдин ботдаги
-        тўлов ҳолатларини ҳам тўғрилаш керак.
+        Jonli pul o'tkazish hozircha o'chirilgan.
+        Xavfsizlik tekshiruvlaridan keyin alohida yoqiladi.
         """
+
         return {
             "Success": False,
             "status": "DISABLED",
