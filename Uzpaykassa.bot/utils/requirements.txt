@@ -1,0 +1,3 @@
+# Standard-library modules such as sqlite3, hashlib, hmac, json, random,
+# datetime, and threading must not be installed with pip.
+-r ../requirements.txt
