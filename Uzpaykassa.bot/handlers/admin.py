@@ -523,7 +523,7 @@ def handle_manual_deposit(bot: telebot.TeleBot, message: Message):
         return
 
     if step == 'bukmeker':
-        valid = {"🎯 1xBet": "1xBet", "🎲 Melbet": "Melbet", "🎪 Betwiner": "Betwiner", "🎨 WinWinBet": "WinWinBet", "1xBet": "1xBet", "Melbet": "Melbet", "Betwiner": "Betwiner", "WinWinBet": "WinWinBet"}
+        valid = {"🎯 1xBet": "1xBet", "🎲 Melbet": "Melbet", "🎪 Betwiner": "Betwiner", "🎨 WinWinBet": "WinWinBet", "🎰 Mostbet": "Mostbet", "1xBet": "1xBet", "Melbet": "Melbet", "Betwiner": "Betwiner", "WinWinBet": "WinWinBet", "Mostbet": "Mostbet"}
         chosen = valid.get(message.text)
         if not chosen:
             # Debug: konsolga xabar chiqarish
