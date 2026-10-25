@@ -132,7 +132,7 @@ def register_admin_handlers(bot: telebot.TeleBot):
 
         def fetch_and_update(message_id: int):
             balances = {}
-            with ThreadPoolExecutor(max_workers=4) as ex:
+            with ThreadPoolExecutor(max_workers=5) as ex:
                 future_map = {ex.submit(func): name for name, func in providers.items()}
                 try:
                     # 10 soniya timeout - barcha API chaqiruvlari uchun yetarli
