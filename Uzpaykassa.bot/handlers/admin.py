@@ -253,8 +253,8 @@ def register_admin_handlers(bot: telebot.TeleBot):
         # MUHIM: Qo'lda to'ldirish bosqichida bukmeker tanlash uchun bu tugmalar state'ni o'chirmasligi kerak
         menu_buttons = [
             "👨‍💼 Admin panel", "👤 Foydalanuvchi menyu", "✋ Qo'lda to'ldirish",
-            "📊 Statistika", "📢 Xabar yuborish", "🔧 Bot o'chirish",
-            "💳 Karta qo'shish", "💰 Kasa balansi", "🔄 Yangilash",
+            "📊 Statistika", "📢 Xabar yuborish", "🔧 Bot o'chirish/yoqish",
+            "💳 Karta qo'shish", "💰 chirish balansi", "🔄 Yangilash",
             "➕ Karta qo'shish", "📋 Kartalar ro'yxati", "❌ Karta o'chirish"
         ]
         
