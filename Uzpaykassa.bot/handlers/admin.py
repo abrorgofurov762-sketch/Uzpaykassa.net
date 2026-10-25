@@ -9,6 +9,7 @@ from utils.helpers import create_balance_message, create_stats_message, log_manu
 from utils.bot_helpers import safe_send_message  # resilient send wrapper
 from utils.validators import validate_card_number, validate_amount, validate_player_id
 from api.xbet_api import xbet_api
+from api.mostbet_api import mostbet_api
 from api.mobcash_api import melbet_api, betwiner_api, winwin_api
 from concurrent.futures import ThreadPoolExecutor, wait
 from threading import Thread
