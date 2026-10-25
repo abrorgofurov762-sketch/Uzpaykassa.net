@@ -72,7 +72,7 @@ def register_admin_handlers(bot: telebot.TeleBot):
         )
     
     # Bot o'chirish/yoqish
-    @bot.message_handler(func=lambda message: message.from_user.id == ADMIN_ID and message.text == "🔧 Bot o'chirish")
+    @bot.message_handler(func=lambda message: message.from_user.id == ADMIN_ID and message.text == "🔧 Bot o'chirish/yoqish")
     def toggle_bot(message: Message):
         config.BOT_ACTIVE = not config.BOT_ACTIVE
         status = "✅ yoqildi" if config.BOT_ACTIVE else "❌ o'chirildi"
