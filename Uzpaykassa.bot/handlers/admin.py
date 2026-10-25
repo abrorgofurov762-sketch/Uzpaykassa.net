@@ -88,7 +88,7 @@ def register_admin_handlers(bot: telebot.TeleBot):
         )
     
     # Balans ko'rish
-    @bot.message_handler(func=lambda message: message.from_user.id == ADMIN_ID and message.text == "💰 Kasa balansi")
+    @bot.message_handler(func=lambda message: message.from_user.id == ADMIN_ID and message.text == "💰 Kassa balansi")
     def show_balance(message: Message):
         # Simple in-memory cache to avoid repeated slow balance fetches
         # Cache key is static (admin view). TTL controlled by config.BALANCE_CACHE_SECONDS
