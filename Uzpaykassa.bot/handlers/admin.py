@@ -111,12 +111,23 @@ def register_admin_handlers(bot: telebot.TeleBot):
                 pass
 
         # Fetch balances concurrently for speed and robustness, but don't block the bot worker.
-        providers = {
-            '1xBet': lambda: xbet_api.get_balance() if xbet_api else {'Success': False},
-            'Melbet': lambda: melbet_api.get_balance() if melbet_api else {'Success': False},
-            'Betwiner': lambda: betwiner_api.get_balance() if betwiner_api else {'Success': False},
-            'WinWinBet': lambda: winwin_api.get_balance() if winwin_api else {'Success': False},
-        }
+                providers = {
+            '1xBet': lambda: xbet_api.get_balance() if xbet_api else {
+                'Success': False, 'error': 'API mavjud emas'
+            },
+            'Melbet': lambda: melbet_api.get_balance() if melbet_api else {
+                'Success': False, 'error': 'API mavjud emas'
+            },
+            'Betwiner': lambda: betwiner_api.get_balance() if betwiner_api else {
+                'Success': False, 'error': 'API mavjud emas'
+            },
+            'WinWinBet': lambda: winwin_api.get_balance() if winwin_api else {
+                'Success': False, 'error': 'API mavjud emas'
+            },
+            'Mostbet': lambda: mostbet_api.get_balance() if mostbet_api else {
+                'Success': False, 'error': 'Mostbet API mavjud emas'
+            },
+                }
 
         def fetch_and_update(message_id: int):
             balances = {}
