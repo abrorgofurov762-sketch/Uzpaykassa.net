@@ -22,6 +22,9 @@ from utils.state_manager import (
 from config import MIN_DEPOSIT, MAX_DEPOSIT
 import threading
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def register_deposit_handlers(bot: telebot.TeleBot):
@@ -81,7 +84,7 @@ def register_deposit_handlers(bot: telebot.TeleBot):
                 )
             else:
                 bot.send_message(
-                    user_id, "🏠 Asosiy menyu:",
+                    user_id, "🏠 Asosiy меню:",
                     reply_markup=get_main_menu_keyboard(),
                 )
             return
@@ -106,7 +109,7 @@ def register_deposit_handlers(bot: telebot.TeleBot):
             from utils.bot_helpers import safe_send_message
             checking_msg = safe_send_message(bot, user_id, "⏳ Tekshirilmoqda...")
         except Exception:
-            pass
+            logger.exception("Could not send player-check message")
 
         def _async_check_player(u_id: int, bkm: str, p_id: str, check_msg):
             from utils.bot_helpers import safe_send_message
@@ -117,22 +120,18 @@ def register_deposit_handlers(bot: telebot.TeleBot):
                     error_msg = player_info.get("error", "ID topilmadi")
                     try:
                         if check_msg:
-                            try:
-                                bot.delete_message(u_id, check_msg.message_id)
-                            except Exception:
-                                pass
-                        safe_send_message(
-                            bot, u_id,
-                            "❌ Xatolik yuz berdi!\n\n"
-                            f"🔍 Sabab: {error_msg}\n\n"
-                            "💡 Iltimos, ID ni to'g'ri kiriting yoki keyinroq urinib ko'ring.",
-                            reply_markup=get_back_keyboard(),
-                        )
+                            bot.delete_message(u_id, check_msg.message_id)
                     except Exception:
                         pass
+                    safe_send_message(
+                        bot, u_id,
+                        "❌ Xatolik yuz berdi!\n\n"
+                        f"🔍 Sabab: {error_msg}\n\n"
+                        "💡 Iltimos, ID ni to'g'ri kiriting yoki keyinroq urinib ko'ring.",
+                        reply_markup=get_back_keyboard(),
+                    )
                     return
 
-                # API lar qaytaradigan ism kalitlarini bir xil usulda o'qiymiz.
                 player_name = (
                     player_info.get("Name")
                     or player_info.get("name")
@@ -140,7 +139,6 @@ def register_deposit_handlers(bot: telebot.TeleBot):
                     or ""
                 )
 
-                # Mostbet uchun o'yinchi tasdiqlanishi va ismi qaytishi shart.
                 if bkm == "Mostbet" and not player_name:
                     try:
                         if check_msg:
@@ -155,44 +153,45 @@ def register_deposit_handlers(bot: telebot.TeleBot):
                     )
                     return
 
-                deposit_states[u_id]["player_id"] = p_id
-                deposit_states[u_id]["player_info"] = player_info
-                deposit_states[u_id]["step"] = "amount"
+                # Thread ichida foydalanuvchi holati o'chirilgan bo'lishi mumkin.
+                current_state = deposit_states.get(u_id)
+                if not current_state or current_state.get("bukmeker") != bkm:
+                    return
+
+                current_state["player_id"] = p_id
+                current_state["player_info"] = player_info
+                current_state["step"] = "amount"
 
                 if not player_name:
                     player_name = "Foydalanuvchi"
 
                 try:
                     if check_msg:
-                        try:
-                            bot.delete_message(u_id, check_msg.message_id)
-                        except Exception:
-                            pass
-                    safe_send_message(
-                        bot, u_id,
-                        f"👤 Foydalanuvchi: {player_name}\n\n"
-                        "💰 To'lash summasini kiriting:\n\n"
-                        f"💡 Minimal: {MIN_DEPOSIT:,} so'm\n"
-                        f"💡 Maksimal: {MAX_DEPOSIT:,} so'm\n\n"
-                        "📝 Misol: 50000",
-                        reply_markup=get_back_keyboard(),
-                    )
+                        bot.delete_message(u_id, check_msg.message_id)
                 except Exception:
                     pass
+                safe_send_message(
+                    bot, u_id,
+                    f"👤 Foydalanuvchi: {player_name}\n\n"
+                    "💰 To'lash summasini kiriting:\n\n"
+                    f"💡 Minimal: {MIN_DEPOSIT:,} so'm\n"
+                    f"💡 Maksimal: {MAX_DEPOSIT:,} so'm\n\n"
+                    "📝 Misol: 50000",
+                    reply_markup=get_back_keyboard(),
+                )
 
             except Exception:
+                logger.exception("Player ID check failed for %s", bkm)
                 try:
                     if check_msg:
-                        try:
-                            bot.delete_message(u_id, check_msg.message_id)
-                        except Exception:
-                            pass
-                    safe_send_message(
-                        bot, u_id,
-                        "❌ Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.",
-                    )
+                        bot.delete_message(u_id, check_msg.message_id)
                 except Exception:
                     pass
+                safe_send_message(
+                    bot, u_id,
+                    "❌ Xatolik yuz berdi. Iltimos keyinroq urinib ko'ring.",
+                    reply_markup=get_back_keyboard(),
+                )
 
         threading.Thread(
             target=_async_check_player,
@@ -281,7 +280,7 @@ def check_player(bukmeker: str, player_id: str) -> dict:
         if not result.get("Success"):
             return {
                 "Success": False,
-                "error": result.get("error", "API xatolik"),
+                "error": result.get("error") or result.get("Error") or "API xatolik",
                 "warning": result.get("warning"),
             }
 
@@ -300,7 +299,7 @@ def check_player(bukmeker: str, player_id: str) -> dict:
         return normalized
 
     except Exception:
-        # API xatosida foydalanuvchini tasdiqlangan deb ko'rsatmaymiz.
+        logger.exception("Bookmaker player lookup failed: %s", bukmeker)
         return {"Success": False, "error": "API bilan bog'lanishda xatolik"}
 
 
@@ -365,12 +364,13 @@ def process_deposit(
                     payment_id, sent_msg.chat.id, sent_msg.message_id
                 )
         except Exception:
-            pass
+            logger.exception("Could not save payment message IDs")
 
-        # To'lovni tasdiqlash mavjud PAYMENT xabari jarayoni orqali bajariladi.
-        # Bu funksiya ichida avtomatik monitor ishga tushirilmaydi.
+        # Muhim: karta to'lovi tasdiqlanmaguncha bookmaker API ga depozit yubormang.
+        # Tasdiqlash admin/payment handler ichida amalga oshirilishi kerak.
 
     except Exception:
+        logger.exception("Could not create deposit payment")
         safe_send_message(
             bot, user_id,
             "❌ Xatolik yuz berdi. Qaytadan urinib ko'ring.",
@@ -397,6 +397,7 @@ def get_balance(bukmeker: str, player_id: str = None) -> dict:
             return api.get_balance()
         return {"Success": False, "Balance": 0, "Limit": 0}
     except Exception:
+        logger.exception("Could not get bookmaker balance: %s", bukmeker)
         return {"Success": False, "Balance": 0, "Limit": 0}
 
 
@@ -404,7 +405,10 @@ def monitor_payment(
     bot: telebot.TeleBot, user_id: int, payment_id: str, bukmeker: str,
     player_id: str, final_amount: float, player_info: dict
 ):
-    """Eski monitoring funksiyasi."""
+    """
+    Eski monitoring funksiyasi. Eslatma: uni avtomatik ishga tushirishdan oldin
+    admin tasdig'i va bookmaker transaction-status tekshiruvi ulanishi kerak.
+    """
     from utils.bot_helpers import safe_send_message
 
     try:
@@ -413,94 +417,58 @@ def monitor_payment(
         if not payment or payment.status != "pending":
             return
 
-        success = execute_deposit(bukmeker, player_id, final_amount, player_info)
-        if success:
+        result = execute_deposit_detailed(
+            bukmeker, player_id, final_amount, player_info
+        )
+        status = str(result.get("status", "")).upper()
+
+        # "NEW"/"PENDING" API so'rov qabul qilinganini anglatishi mumkin,
+        # lekin pul hisobga tushganini tasdiqlamaydi.
+        if result.get("Success") and status == "COMPLETED":
             db.update_payment_status(payment_id, "completed")
             safe_send_message(
                 bot, user_id,
                 create_success_message(bukmeker, player_id, final_amount),
                 reply_markup=get_main_menu_keyboard(),
             )
-            try:
-                payment = db.get_payment_by_id(payment_id)
-                chat_id = getattr(payment, "payment_chat_id", None)
-                message_id = getattr(payment, "payment_message_id", None)
-                if chat_id and message_id and int(chat_id) > 0:
-                    try:
-                        bot.edit_message_reply_markup(
-                            chat_id, message_id, reply_markup=None
-                        )
-                    except Exception:
-                        pass
-
-                try:
-                    from config import NOTIFICATION_CHANNEL_ID
-                except Exception:
-                    NOTIFICATION_CHANNEL_ID = None
-
-                if NOTIFICATION_CHANNEL_ID:
-                    try:
-                        user_obj = db.get_user(user_id)
-                        channel_message = create_channel_payment_message(
-                            payment_id, final_amount,
-                            user_obj.username if user_obj else "username_yo'q",
-                            user_obj.phone if user_obj else "telefon_yo'q",
-                            0, 0, bukmeker, success=True,
-                        )
-                        safe_send_message(
-                            bot, NOTIFICATION_CHANNEL_ID, channel_message,
-                            parse_mode="HTML",
-                        )
-                    except Exception:
-                        pass
-            except Exception:
-                pass
+        elif status in ("NEW", "PENDING", "PROCESSING", "IN_PROGRESS"):
+            # Noaniq holatda failed/completed deb belgilamaymiz.
+            safe_send_message(
+                bot, user_id,
+                "⏳ So'rov qabul qilindi, lekin depozit yakunlangani hali tasdiqlanmadi. "
+                "Iltimos, hisobingizni tekshirmaguncha qayta to'lov yubormang.",
+                reply_markup=get_main_menu_keyboard(),
+            )
         else:
             db.update_payment_status(payment_id, "failed")
             safe_send_message(
                 bot, user_id,
-                "❌ To'lov vaqti tugadi, qayta urinib ko'ring /start.",
+                "❌ Depozit API tomonidan tasdiqlanmadi. Admin bilan bog'laning; "
+                "qayta yuborishdan oldin operatsiya holatini tekshirish kerak.",
                 reply_markup=get_main_menu_keyboard(),
             )
-            try:
-                payment = db.get_payment_by_id(payment_id)
-                chat_id = getattr(payment, "payment_chat_id", None)
-                message_id = getattr(payment, "payment_message_id", None)
-                if chat_id and message_id and int(chat_id) > 0:
-                    bot.edit_message_reply_markup(
-                        chat_id, message_id, reply_markup=None
-                    )
-            except Exception:
-                pass
     except Exception:
-        pass
+        logger.exception("Payment monitor failed for %s", payment_id)
 
 
 def execute_deposit(
     bukmeker: str, player_id: str, amount: float, player_info: dict
 ) -> bool:
-    """Deposit faqat API muvaffaqiyatni tasdiqlasa True qaytaradi."""
-    try:
-        if bukmeker == "1xBet" and xbet_api:
-            return bool(xbet_api.deposit_add(player_id, amount).get("Success"))
-        if bukmeker == "Melbet" and melbet_api:
-            return bool(melbet_api.deposit_add(player_id, amount).get("Success"))
-        if bukmeker == "Betwiner" and betwiner_api:
-            return bool(betwiner_api.deposit_add(player_id, amount).get("Success"))
-        if bukmeker == "WinWinBet" and winwin_api:
-            return bool(winwin_api.deposit_add(player_id, amount).get("Success"))
-        if bukmeker == "Mostbet":
-            # Mostbet live deposit API hozir o'chirilgan; soxta success bermaymiz.
-            return False
-        return False
-    except Exception:
-        return False
+    """
+    Faqat yakuniy COMPLETED holati True qaytaradi.
+    API javobidagi Success=True ning o'zi pul hisobga tushganini anglatmasligi mumkin.
+    """
+    result = execute_deposit_detailed(bukmeker, player_id, amount, player_info)
+    return bool(
+        result.get("Success")
+        and str(result.get("status", "")).upper() == "COMPLETED"
+    )
 
 
 def execute_deposit_detailed(
     bukmeker: str, player_id: str, amount: float, player_info: dict
 ) -> dict:
-    """Admin uchun batafsil deposit natijasi."""
+    """Admin uchun batafsil depozit natijasi."""
     try:
         if bukmeker == "1xBet":
             return xbet_api.deposit_add(player_id, amount) if xbet_api else {
@@ -519,14 +487,44 @@ def execute_deposit_detailed(
                 "Success": False, "Error": "WinWinBet API mavjud emas"
             }
         if bukmeker == "Mostbet":
-            return {
-                "Success": False,
-                "status": "DISABLED",
-                "Error": "Mostbet live deposit API hozircha yoqilmagan",
-            }
-        return {"Success": False, "Error": "Noma'lum bukmeker"}
+            if not mostbet_api:
+                return {
+                    "Success": False, "status": "ERROR",
+                    "Error": "Mostbet API sozlanmagan",
+                }
+
+            # API docs asosidagi deposit_player metodi.
+            # NEW/PENDING holatini completed deb ko'rsatmaymiz.
+            result = mostbet_api.deposit_player(
+                brand_id=1,
+                player_id=str(player_id),
+                amount=int(amount),
+                currency="UZS",
+            )
+            if not isinstance(result, dict):
+                return {
+                    "Success": False, "status": "ERROR",
+                    "Error": "Mostbet API noto'g'ri javob qaytardi",
+                }
+
+            result = dict(result)
+            status = str(result.get("status") or result.get("Status") or "").upper()
+            result["status"] = status or "UNKNOWN"
+            result["Success"] = (
+                bool(result.get("Success"))
+                and result["status"] == "COMPLETED"
+            )
+            if result["status"] in ("NEW", "PENDING", "PROCESSING", "IN_PROGRESS"):
+                result.setdefault(
+                    "Error",
+                    "So'rov qabul qilindi, ammo depozit yakunlangani hali tasdiqlanmagan",
+                )
+            return result
+
+        return {"Success": False, "status": "ERROR", "Error": "Noma'lum bukmeker"}
     except Exception as exc:
-        return {"Success": False, "Error": str(exc)}
+        logger.exception("Deposit API failed: %s", bukmeker)
+        return {"Success": False, "status": "ERROR", "Error": str(exc)}
 
 
 def register_cancel_callback(bot: telebot.TeleBot):
@@ -541,6 +539,11 @@ def register_cancel_callback(bot: telebot.TeleBot):
                 call.message.chat.id,
                 call.message.message_id,
             )
+        except Exception:
+            pass
+
+        try:
+            bot.answer_callback_query(call.id, "To'lov bekor qilindi")
         except Exception:
             pass
 
