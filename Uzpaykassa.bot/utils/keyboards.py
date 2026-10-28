@@ -16,6 +16,7 @@ def get_main_menu_keyboard():
     """Asosiy foydalanuvchi menyu klaviaturasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("💰 Hisob to'ldirish", "💸 Pul yechish")
+    keyboard.row("📜 Operatsiyalar tarixi")
     keyboard.row("📱 Ilovalar", "📞 Aloqa")
     return keyboard
 
@@ -23,6 +24,7 @@ def get_main_menu_keyboard_admin():
     """Admin uchun foydalanuvchi menyusi + admin panel tugmasi."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.row("💰 Hisob to'ldirish", "💸 Pul yechish")
+    keyboard.row("📜 Operatsiyalar tarixi")
     keyboard.row("📱 Ilovalar", "📞 Aloqa")
     keyboard.row("👨‍💼 Admin panel")
     return keyboard
