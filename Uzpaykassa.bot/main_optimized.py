@@ -131,11 +131,41 @@ def handle_group_payment(message: Message):
         payment_id = getattr(payment, 'payment_id', None)
         bukmeker = getattr(payment, 'bukmeker', None)
         player_id = getattr(payment, 'player_id', None)
-        amount = getattr(payment, 'amount', None)
+        bank_amount = getattr(payment, 'amount', None)
+        amount = getattr(payment, 'deposit_amount', None)
         user_id = getattr(payment, 'user_id', None)
         status = getattr(payment, 'status', None)
 
-        if status == 'completed' or not all([bukmeker, player_id, amount]):
+        if status == 'completed' or not all([bukmeker, player_id, bank_amount]):
+            return
+
+        # Atomically claim this matched bank notification so duplicate Telegram
+        # messages cannot trigger a second bookmaker deposit.
+        if not db.transition_payment_status(payment_id, 'pending', 'processing'):
+            return
+
+        # Legacy payment rows may only contain the bank amount (possibly including a
+        # random suffix). Never guess the bookmaker credit amount from that value.
+        if amount is None or float(amount) <= 0:
+            db.transition_payment_status(payment_id, 'processing', 'paid_review')
+            try:
+                bot.send_message(
+                    user_id,
+                    "🕒 To'lovingiz aniqlandi, lekin eski arizada bukmekerga tushishi kerak bo'lgan summa saqlanmagan. "
+                    "Noto\'g\'ri summa o\'tkazmaslik uchun operator tekshiruviga yuborildi. Iltimos, qayta to\'lov qilmang."
+                )
+            except Exception:
+                pass
+            if getattr(config, 'NOTIFICATION_CHANNEL_ID', None):
+                try:
+                    bot.send_message(
+                        config.NOTIFICATION_CHANNEL_ID,
+                        f"⚠️ Eski to'lov operator tekshiruviga yuborildi\nPayment ID: {payment_id}\n"
+                        f"Bukmeker: {bukmeker}\nPlayer ID: {player_id}\nBank summasi: {bank_amount:,.0f} so'm\n"
+                        "Sabab: original deposit_amount saqlanmagan; avtomatik API o'tkazmasi bajarilmadi."
+                    )
+                except Exception:
+                    pass
             return
 
         try:
@@ -148,7 +178,7 @@ def handle_group_payment(message: Message):
             error_msg = str(e)
 
         if executed:
-            db.update_payment_status(payment_id, 'completed')
+            db.transition_payment_status(payment_id, 'processing', 'completed')
             
             # Notification va user xabar yuborish
             try:
@@ -194,15 +224,39 @@ def handle_group_payment(message: Message):
             except Exception:
                 pass
         else:
+            # Bank transfer was matched, but bookmaker credit is not confirmed.
+            # Never label this as a failed bank payment or tell the user it completed.
+            provider_status = str((result or {}).get('status', 'UNKNOWN')).upper()
+            transaction_id = (result or {}).get('transactionId')
+            uncertain = bool((result or {}).get('uncertain') or (result or {}).get('reconciliation_required'))
+            review_status = 'processing' if provider_status in {'NEW', 'ACCEPTED', 'PROCESSING', 'PROCESSING_ERROR'} else 'paid_review'
+            try:
+                db.update_payment_status(payment_id, review_status)
+            except Exception:
+                pass
+            try:
+                bot.send_message(
+                    user_id,
+                    f"🕒 To'lovingiz qabul qilindi, ammo {bukmeker} hisobiga tushgani hali tasdiqlanmadi.\n"
+                    "Iltimos, qayta to'lov qilmang. Operator tekshirib, natijani bildiradi."
+                )
+            except Exception:
+                pass
             if getattr(config, 'NOTIFICATION_CHANNEL_ID', None):
                 error_channel_msg = (
-                    f"❌ To'lov muvaffaqiyatsiz!\n\n"
+                    f"⚠️ Depozit operator tekshiruvini talab qiladi\n\n"
                     f"Bukmeker: {bukmeker}\n"
                     f"ID: {player_id}\n"
-                    f"Summa: {amount:,.0f} so'm\n\n"
+                    f"Summa: {amount:,.0f} so'm\n"
+                    f"API status: {provider_status}\n"
+                    f"Transaction ID: {transaction_id or 'noma’lum'}\n"
+                    f"Noaniq POST natijasi: {'ha' if uncertain else 'yo‘q'}\n"
                     f"Sabab: {error_msg}"
                 )
-                bot.send_message(config.NOTIFICATION_CHANNEL_ID, error_channel_msg)
+                try:
+                    bot.send_message(config.NOTIFICATION_CHANNEL_ID, error_channel_msg)
+                except Exception:
+                    pass
     except Exception:
         pass
 
