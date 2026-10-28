@@ -14,6 +14,7 @@ Features:
 """
 
 import sqlite3
+import os
 from typing import List, Optional
 from datetime import datetime, timedelta
 from .models import User, Payment, Withdrawal, Card
@@ -40,7 +41,11 @@ class Database:
     
     def init_database(self):
         """Database va jadvallarni yaratish"""
-        with sqlite3.connect(self.db_path) as conn:
+        # Support a mounted Render disk path such as /var/data/bot_database.db.
+        parent = os.path.dirname(os.path.abspath(self.db_path))
+        os.makedirs(parent, exist_ok=True)
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
+            conn.execute("PRAGMA busy_timeout = 10000")
             cursor = conn.cursor()
             
             # Users jadvali
@@ -70,6 +75,7 @@ class Database:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     payment_chat_id INTEGER,
                     payment_message_id INTEGER,
+                    deposit_amount REAL,
                     FOREIGN KEY (user_id) REFERENCES users (user_id)
                 )
             ''')
@@ -107,6 +113,16 @@ class Database:
                 except Exception:
                     # ignore if ALTER TABLE not supported on older DB file
                     self.has_message_columns = False
+
+            # Keep the original bookmaker amount separate from the bank amount.
+            cursor.execute("PRAGMA table_info(payments)")
+            payment_cols = [r[1] for r in cursor.fetchall()]
+            if 'deposit_amount' not in payment_cols:
+                try:
+                    cursor.execute("ALTER TABLE payments ADD COLUMN deposit_amount REAL")
+                    conn.commit()
+                except Exception:
+                    pass
             
             # Withdrawals jadvali
             cursor.execute('''
@@ -219,19 +235,19 @@ class Database:
                     if getattr(self, 'has_message_columns', False):
                         cursor.execute('''
                             INSERT INTO payments 
-                            (user_id, bukmeker, player_id, amount, payment_id, card_last4, status, payment_chat_id, payment_message_id)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (user_id, bukmeker, player_id, amount, payment_id, card_last4, status, payment_chat_id, payment_message_id, deposit_amount)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (payment.user_id, payment.bukmeker, payment.player_id,
                              payment.amount, payment.payment_id, payment.card_last4, 
-                             payment.status, payment.payment_chat_id, payment.payment_message_id))
+                             payment.status, payment.payment_chat_id, payment.payment_message_id, payment.deposit_amount))
                     else:
                         cursor.execute('''
                             INSERT INTO payments 
-                            (user_id, bukmeker, player_id, amount, payment_id, card_last4, status)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            (user_id, bukmeker, player_id, amount, payment_id, card_last4, status, deposit_amount)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (payment.user_id, payment.bukmeker, payment.player_id,
                              payment.amount, payment.payment_id, payment.card_last4, 
-                             payment.status))
+                             payment.status, payment.deposit_amount))
                     conn.commit()
                     return True
             except sqlite3.IntegrityError:
@@ -250,6 +266,10 @@ class Database:
                     payment = Payment(row[1], row[2], row[3], row[4], row[5], row[6])
                     payment.status = row[7]
                     payment.created_at = row[8]
+                    try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
                     # optional columns
                     try:
                         payment.updated_at = row[9]
@@ -266,7 +286,10 @@ class Database:
             return None
     
     def update_payment_status(self, payment_id: str, status: str) -> bool:
-        """To'lov statusini yangilash"""
+        """To'lov statusini yangilash; faqat ma'lum status qiymatlariga ruxsat."""
+        allowed_statuses = {"pending", "processing", "paid", "paid_review", "completed", "failed", "expired"}
+        if not payment_id or status not in allowed_statuses:
+            return False
         with self.lock:
             try:
                 with sqlite3.connect(self.db_path) as conn:
@@ -296,8 +319,38 @@ class Database:
                             SET status = ? 
                             WHERE payment_id = ?
                         ''', (status, payment_id))
+                    changed = cursor.rowcount
                     conn.commit()
-                    return True
+                    return changed > 0
+            except Exception:
+                return False
+
+    def transition_payment_status(self, payment_id: str, expected_status: str, new_status: str) -> bool:
+        """Atomically change a payment status only if it is still in expected_status.
+
+        This prevents duplicate bank-notification messages or concurrent workers from
+        processing the same pending payment more than once.
+        """
+        allowed = {"pending", "processing", "paid", "paid_review", "completed", "failed", "expired"}
+        if not payment_id or expected_status not in allowed or new_status not in allowed:
+            return False
+        with self.lock:
+            try:
+                with sqlite3.connect(self.db_path, timeout=10) as conn:
+                    cursor = conn.cursor()
+                    if getattr(self, "has_updated_at", False):
+                        cursor.execute(
+                            "UPDATE payments SET status = ?, updated_at = CURRENT_TIMESTAMP "
+                            "WHERE payment_id = ? AND status = ?",
+                            (new_status, payment_id, expected_status),
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE payments SET status = ? WHERE payment_id = ? AND status = ?",
+                            (new_status, payment_id, expected_status),
+                        )
+                    conn.commit()
+                    return cursor.rowcount == 1
             except Exception:
                 return False
 
@@ -341,6 +394,10 @@ class Database:
                     payment = Payment(row[1], row[2], row[3], row[4], row[5], row[6])
                     payment.status = row[7]
                     payment.created_at = row[8]
+                    try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
                     try:
                         payment.updated_at = row[9]
                     except Exception:
@@ -425,6 +482,10 @@ class Database:
                     payment.status = row[7]
                     payment.created_at = row[8]
                     try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
+                    try:
                         payment.updated_at = row[9]
                     except Exception:
                         pass
@@ -457,6 +518,10 @@ class Database:
                     payment = Payment(row[1], row[2], row[3], row[4], row[5], row[6])
                     payment.status = row[7]
                     payment.created_at = row[8]
+                    try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
                     try:
                         payment.updated_at = row[9]
                     except Exception:
@@ -491,6 +556,10 @@ class Database:
                     payment.status = row[7]
                     payment.created_at = row[8]
                     try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
+                    try:
                         payment.updated_at = row[9]
                     except Exception:
                         pass
@@ -523,6 +592,10 @@ class Database:
                     payment = Payment(row[1], row[2], row[3], row[4], row[5], row[6])
                     payment.status = row[7]
                     payment.created_at = row[8]
+                    try:
+                        payment.deposit_amount = row[12]
+                    except Exception:
+                        pass
                     try:
                         payment.updated_at = row[9]
                     except Exception:
@@ -618,17 +691,76 @@ class Database:
         except Exception:
             return None
     
-    def update_withdrawal_status(self, withdrawal_id: int, status: str) -> bool:
-        """Yechish statusini yangilash"""
+    def get_user_withdrawals(self, user_id: int, limit: int = 10) -> List[Withdrawal]:
+        """Return a user's recent withdrawal requests, newest first.
+
+        Sensitive fields (full card number and verification code) are loaded for
+        internal model compatibility but must never be shown in user-facing history.
+        """
+        try:
+            safe_limit = max(1, min(int(limit), 50))
+            with sqlite3.connect(self.db_path, timeout=10) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT * FROM withdrawals WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+                    (int(user_id), safe_limit),
+                )
+                rows = cursor.fetchall()
+                withdrawals = []
+                for row in rows:
+                    withdrawal = Withdrawal(row[1], row[2], row[3], row[4], row[5])
+                    withdrawal.amount = row[6]
+                    withdrawal.status = row[7]
+                    try:
+                        withdrawal.created_at = row[8]
+                    except (IndexError, TypeError):
+                        pass
+                    withdrawal.id = row[0]
+                    withdrawals.append(withdrawal)
+                return withdrawals
+        except Exception:
+            return []
+
+    def update_withdrawal_status(
+        self, withdrawal_id: int, status: str, expected_status: Optional[str] = None
+    ) -> bool:
+        """Update withdrawal status; optionally require a specific current status.
+
+        The conditional form is used for one-time admin confirmations so a repeated
+        callback cannot complete and notify the same withdrawal twice.
+        """
+        allowed = {"pending", "approved", "completed", "failed"}
+        allowed_transitions = {
+            "pending": {"approved", "completed", "failed"},
+            "approved": {"completed", "failed"},
+            "completed": set(),
+            "failed": set(),
+        }
+        if status not in allowed or (expected_status is not None and expected_status not in allowed):
+            return False
+        if expected_status is not None and status not in allowed_transitions[expected_status]:
+            return False
         with self.lock:
             try:
-                with sqlite3.connect(self.db_path) as conn:
+                with sqlite3.connect(self.db_path, timeout=10) as conn:
                     cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE withdrawals SET status = ? WHERE id = ?
-                    ''', (status, withdrawal_id))
+                    if expected_status is None:
+                        # Avoid moving terminal states backwards when callers omit expected_status.
+                        valid_sources = [src for src, targets in allowed_transitions.items() if status in targets]
+                        if not valid_sources:
+                            return False
+                        placeholders = ",".join("?" for _ in valid_sources)
+                        cursor.execute(
+                            f"UPDATE withdrawals SET status = ? WHERE id = ? AND status IN ({placeholders})",
+                            (status, int(withdrawal_id), *valid_sources),
+                        )
+                    else:
+                        cursor.execute(
+                            "UPDATE withdrawals SET status = ? WHERE id = ? AND status = ?",
+                            (status, int(withdrawal_id), expected_status),
+                        )
                     conn.commit()
-                    return True
+                    return cursor.rowcount == 1
             except Exception:
                 return False
     
