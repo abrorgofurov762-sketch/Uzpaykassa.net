@@ -16,7 +16,7 @@ from handlers.deposit import register_deposit_handlers, register_cancel_callback
 from handlers.withdrawal import register_withdrawal_handlers
 from handlers.admin import register_admin_handlers
 from handlers.payments import register_payment_handlers
-from handlers.deposit import execute_deposit
+from handlers.deposit import execute_deposit, execute_deposit_detailed
 from utils.keyboards import get_main_menu_keyboard, get_admin_menu_keyboard
 from utils.helpers import create_channel_payment_message
 from utils.state_manager import is_user_in_process
@@ -120,37 +120,62 @@ def handle_group_payment(message: Message):
                 if not payment:
                     return
 
-                # mark completed in DB, but only notify admin/group if this is the first time
+                # The group notification confirms receipt of a payment, not bookmaker credit.
+                # Lock this payment as processing so duplicate notifications cannot trigger a second attempt.
                 try:
                     payment_id = getattr(payment, 'payment_id', None)
-                    # Load current DB record to see current status
-                    existing = db.get_payment_by_id(payment_id)
-                    already_completed = getattr(existing, 'status', None) == 'completed'
-
-                    # Update status to completed (idempotent)
-                    db.update_payment_status(payment_id, 'completed')
-                except Exception:
-                    existing = None
-                    already_completed = False
-
-                # Notify admin only if this payment wasn't already completed
-                # No admin DM on detection; silent proceed. If already completed, we also stay silent.
+                    # Atomic compare-and-set: only one worker can claim a pending payment.
+                    if not db.transition_payment_status(payment_id, 'pending', 'processing'):
+                        return
+                except Exception as e:
+                    print(f"Could not lock matched payment: {e}")
+                    return
 
                 # Execute deposit in a separate background thread so this detector thread can finish quickly
                 def _bg_execute_deposit():
                     try:
                         bukmeker = getattr(payment, 'bukmeker', None)
                         player_id = getattr(payment, 'player_id', None)
-                        amount = getattr(payment, 'amount', None)
+                        bank_amount = getattr(payment, 'amount', None)
+                        amount = getattr(payment, 'deposit_amount', None)
                         user_id = getattr(payment, 'user_id', None)
 
-                        executed = False
+                        # Older pending rows may not store the requested bookmaker amount.
+                        # Never send the bank amount (which can contain a random suffix) to Mostbet.
+                        if amount is None or float(amount) <= 0:
+                            db.transition_payment_status(payment_id, 'processing', 'paid_review')
+                            try:
+                                bot.send_message(
+                                    user_id,
+                                    "🕒 To'lovingiz aniqlandi, ammo eski arizada bukmekerga tushishi kerak bo'lgan summa saqlanmagan. "
+                                    "Operator tekshiruviga yuborildi. Iltimos, qayta to'lov qilmang."
+                                )
+                            except Exception:
+                                pass
+                            try:
+                                admin_id = getattr(config, 'ADMIN_ID', None)
+                                if admin_id:
+                                    bot.send_message(
+                                        admin_id,
+                                        f"⚠️ Eski to'lov qo'lda tekshiruvga yuborildi\nPayment ID: {payment_id}\n"
+                                        f"Bukmeker: {bukmeker}\nPlayer ID: {player_id}\nBank summasi: {bank_amount:,.0f} so'm\n"
+                                        "Sabab: original deposit_amount yo'q; avtomatik depozit bajarilmadi."
+                                    )
+                            except Exception:
+                                pass
+                            return
+
+                        result = {"Success": False, "status": "UNKNOWN"}
                         try:
-                            executed = execute_deposit(bukmeker, player_id, amount, {})
+                            result = execute_deposit_detailed(bukmeker, player_id, amount, {})
                         except Exception as e:
                             print(f"Error executing deposit after detection (bg): {e}")
+                        provider_status = str(result.get('status', 'UNKNOWN')).upper()
+                        executed = bool(result.get('Success') and provider_status == 'COMPLETED')
 
                         if executed:
+                            # Only this branch means the provider API returned final COMPLETED.
+                            db.transition_payment_status(payment_id, 'processing', 'completed')
                             try:
                                 bot.send_message(user_id, f"✅ To'lov muvaffaqiyatli amalga oshirildi. Bukmeker: {bukmeker}, Summa: {amount:,.0f} so'm")
                             except Exception:
@@ -189,11 +214,38 @@ def handle_group_payment(message: Message):
                             except Exception:
                                 pass
                         else:
+                            # Bank payment was detected, but bookmaker credit was not confirmed.
+                            # Keep it for manual reconciliation; never tell the user it failed or succeeded.
+                            # Keep non-final provider states in processing; unknown/failed
+                            # outcomes require operator reconciliation, not an automatic retry.
                             try:
-                                db.update_payment_status(payment_id, 'failed')
+                                if result.get('Pending') or provider_status in {'NEW', 'ACCEPTED', 'PROCESSING', 'PROCESSING_ERROR'}:
+                                    db.update_payment_status(payment_id, 'processing')
+                                else:
+                                    db.update_payment_status(payment_id, 'paid_review')
                             except Exception:
                                 pass
-                            # No admin spam on failure either
+                            try:
+                                admin_id = getattr(config, 'ADMIN_ID', None)
+                                if admin_id:
+                                    bot.send_message(
+                                        admin_id,
+                                        f"⚠️ To'lov qabul qilingani aniqlandi, ammo bukmeker depoziti tasdiqlanmadi.\n"
+                                        f"Payment ID: {payment_id}\nBukmeker: {bukmeker}\n"
+                                        f"ID: {player_id}\nSumma: {amount:,.0f} so'm\n"
+                                        f"API status: {provider_status}\nTransaction ID: {result.get('transactionId', 'noma’lum')}\n"
+                                        "Iltimos, provayder holatini tekshirib, qo'lda yarashtiring."
+                                    )
+                            except Exception:
+                                pass
+                            try:
+                                bot.send_message(
+                                    user_id,
+                                    "✅ To'lov xabari qabul qilindi. Bukmeker hisobiga tushgani hali tasdiqlanmadi; "
+                                    "tekshiruv uchun qo'llab-quvvatlash xizmatiga murojaat qiling. Qayta to'lov yubormang."
+                                )
+                            except Exception:
+                                pass
                     except Exception as e:
                         print(f"Unexpected error in background deposit execution: {e}")
 
