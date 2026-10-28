@@ -73,7 +73,12 @@ class PaymentDetector:
             # 1) Old style explicit PAYMENT|amount|last4
             match = self.PAYMENT_RE.search(cleaned_text)
             if match:
-                amount_str = match.group(1).replace(',', '.')
+                amount_str = match.group(1).strip()
+                # Treat comma as a thousands separator when exactly three digits
+                # follow it (e.g. 50,000); otherwise treat it as a decimal mark.
+                if ',' in amount_str and '.' not in amount_str:
+                    left, right = amount_str.rsplit(',', 1)
+                    amount_str = (left + right) if len(right) == 3 else (left + '.' + right)
                 amount = float(amount_str)
                 card_last4 = match.group(2)
 
@@ -116,27 +121,8 @@ class PaymentDetector:
                     'raw_message': message_text
                 }
 
-            # 3) Fallback: try to find currency-like amount and any nearby 4-digit group
-            # This is conservative: require both an amount-like token and a 4-digit sequence
-            generic_amount_re = re.compile(r"([\d]{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?)")
-            generic_card_re = re.compile(r"\b(\d{4})\b")
-
-            g_amount = generic_amount_re.search(cleaned_text)
-            g_card = generic_card_re.search(cleaned_text)
-            if g_amount and g_card:
-                raw_amount = g_amount.group(1)
-                amount_digits = re.sub(r"[\s,]", "", raw_amount)
-                amount_digits = re.sub(r"[^\d.]", "", amount_digits)
-                try:
-                    amount = float(amount_digits)
-                    card_last4 = g_card.group(1)
-                    return {
-                        'amount': amount,
-                        'card_last4': card_last4,
-                        'raw_message': message_text
-                    }
-                except Exception:
-                    return None
+            # No generic-number fallback: matching an arbitrary 4-digit number in
+            # an unrelated message could credit the wrong user's payment request.
 
             return None
         except (ValueError, AttributeError):
@@ -165,10 +151,17 @@ class PaymentDetector:
             # Database'dan aniq match qidirish
             candidates = self.db.get_pending_payments_by_card_and_amount(card_last4, amount, tol)
             
-            # Eng yangi paymentni qaytarish (created_at DESC)
-            if candidates:
+            # A payment notification is not enough to identify a unique customer
+            # when multiple pending requests share the same card suffix and amount.
+            # Never guess based on recency; leave ambiguous cases for manual review.
+            if len(candidates) == 1:
                 return candidates[0]
-            
+            if len(candidates) > 1:
+                print(
+                    "[payment_detector] Ambiguous match: "
+                    f"{len(candidates)} pending payments for card ****{card_last4} "
+                    f"and amount {amount}; manual review required."
+                )
             return None
             
         except Exception:
@@ -202,8 +195,9 @@ class PaymentDetector:
             if not payment_id:
                 return False
             
-            self.db.update_payment_status(payment_id, 'completed')
-            return True
+            # This confirms only that a bank/payment notification was matched.
+            # Bookmaker credit must be confirmed separately by its provider API.
+            return bool(self.db.update_payment_status(payment_id, 'paid'))
             
         except (AttributeError, TypeError):
             return False
