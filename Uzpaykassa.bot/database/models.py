@@ -48,6 +48,8 @@ class Payment:
     # Optional message identifiers for the payment message sent to the user
     payment_chat_id: Optional[int] = None
     payment_message_id: Optional[int] = None
+    # Original bookmaker credit amount, separate from bank transfer amount with random suffix.
+    deposit_amount: Optional[float] = None
     
     def __post_init__(self):
         """Validatsiya"""
