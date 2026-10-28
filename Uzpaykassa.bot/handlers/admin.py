@@ -349,6 +349,14 @@ def register_admin_handlers(bot: telebot.TeleBot):
     # Admin manual deposit callback handler
     @bot.callback_query_handler(func=lambda call: call.data in ['admin_md_confirm','admin_md_cancel'])
     def admin_manual_deposit_callback(call: CallbackQuery):
+        # Inline callback'ni faqat admin bajarishi mumkin.
+        if not call.from_user or call.from_user.id != ADMIN_ID:
+            try:
+                bot.answer_callback_query(call.id, "Sizda ruxsat yo'q", show_alert=True)
+            except Exception:
+                pass
+            return
+
         # State check - yanada yumshoq
         state = admin_states.get(ADMIN_ID)
         if not state:
@@ -420,7 +428,8 @@ def register_admin_handlers(bot: telebot.TeleBot):
         except Exception:
             pass
         
-        succ = result.get('Success')
+        final_status = str(result.get('status', '')).upper()
+        succ = bool(result.get('Success') and final_status == 'COMPLETED')
         if succ:
             # Balans olish - to'g'ri funksiya
             balance_info = {'Balance': 0, 'Limit': 0}
