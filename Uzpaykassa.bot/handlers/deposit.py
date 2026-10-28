@@ -332,6 +332,7 @@ def process_deposit(
             amount=final_amount,
             payment_id=payment_id,
             card_last4=card.card_number[-4:],
+            deposit_amount=amount,
         )
 
         if not db.add_payment(payment):
@@ -499,7 +500,7 @@ def execute_deposit_detailed(
                 brand_id=1,
                 player_id=str(player_id),
                 amount=int(amount),
-                currency="UZS",
+                currency=None,
             )
             if not isinstance(result, dict):
                 return {
