@@ -220,7 +220,7 @@ def get_bukmeker_emoji(bukmeker: str) -> str:
         "Melbet": "🎲", 
         "Betwiner": "🎪",
         "WinWinBet": "🎨",
-        "Mostbet": " "🎰" 
+        "Mostbet": "🎰"
     }
     return emojis.get(bukmeker, "🎲")
 
