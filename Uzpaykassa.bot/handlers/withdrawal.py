@@ -119,8 +119,13 @@ def register_withdrawal_handlers(bot: telebot.TeleBot):
 				bot.answer_callback_query(call.id, "Ariza topilmadi", show_alert=True)
 				return
 
-			# Statusni completed ga o'zgartirish
-			db.update_withdrawal_status(_id, 'completed')
+			# Only a pending request can be completed; duplicate/old callbacks are rejected.
+			if getattr(w, 'status', None) != 'pending':
+				bot.answer_callback_query(call.id, "Bu ariza allaqachon ko'rib chiqilgan", show_alert=True)
+				return
+			if not db.update_withdrawal_status(_id, 'completed', expected_status='pending'):
+				bot.answer_callback_query(call.id, "Ariza holati o'zgargan yoki topilmadi", show_alert=True)
+				return
 			
 			# Foydalanuvchiga xabar (summa format_amount bilan, qo'shimcha " so'm" YO'Q)
 			try:
@@ -318,8 +323,12 @@ def handle_withdrawal_code(bot: telebot.TeleBot, message: Message):
 				elif bkm == "WinWinBet" and winwin_api:
 					result = winwin_api.withdraw_subtract(p_id, payout_code)
 				elif bkm == "Mostbet" and mostbet_api:
-					# Mostbet uchun manual approval
-					result = {'Success': True, 'Amount': 0}
+					# Payout confirmation is not implemented; never fake success.
+					result = {
+						'Success': False,
+						'status': 'DISABLED',
+						'error': 'MOSTBET_PAYOUT_NOT_IMPLEMENTED',
+					}
 			except Exception:
 				result = None
 
