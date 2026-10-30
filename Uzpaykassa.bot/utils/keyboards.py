@@ -81,7 +81,7 @@ def get_balance_keyboard():
 def get_urls_keyboard():
     """Static admin URL inline klaviaturasi."""
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("👨‍💼 Admin", url="https://t.me/your_admin"))
+    keyboard.add(InlineKeyboardButton("👨‍💼 Admin", url="https://t.me/@realkass"))
     return keyboard
 
 def get_apps_keyboard():
